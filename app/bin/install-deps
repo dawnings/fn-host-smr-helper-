@@ -1,0 +1,52 @@
+#!/bin/bash
+# Install package-managed dependencies during install/upgrade callbacks.
+set -euo pipefail
+
+LOG=${1:-/dev/stderr}
+RELEASE=$(uname -r)
+
+log() { printf '%s\n' "$*" >>"$LOG"; }
+installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -qx 'install ok installed'
+}
+missing_packages() {
+  local package
+  for package in "$@"; do
+    installed "$package" || printf '%s\n' "$package"
+  done
+}
+install_packages() {
+  local -a packages=("$@")
+  ((${#packages[@]})) || return 0
+  log "正在自动安装系统依赖：${packages[*]}"
+  if DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}" >>"$LOG" 2>&1; then
+    return 0
+  fi
+  log "软件包索引可能已过期，尝试更新索引后重试。"
+  DEBIAN_FRONTEND=noninteractive apt-get update >>"$LOG" 2>&1 || return 1
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}" >>"$LOG" 2>&1
+}
+
+if ! command -v apt-get >/dev/null || ! command -v dpkg-query >/dev/null; then
+  log '无法自动安装依赖：系统未提供 apt-get/dpkg-query。'
+  exit 1
+fi
+
+# Dependencies required by the manager and its disk operations.
+mapfile -t hard_missing < <(missing_packages lvm2 btrfs-progs util-linux kmod)
+if ! install_packages "${hard_missing[@]}"; then
+  log '必须依赖自动安装失败；请检查软件源和安装日志后重试。'
+  exit 1
+fi
+
+# These enable optional SATA compatibility probing. Headers are kernel-specific,
+# and may not exist in the configured fnOS repositories, so failure is nonfatal.
+mapfile -t compat_tools_missing < <(missing_packages gcc make)
+if ! install_packages "${compat_tools_missing[@]}"; then
+  log "警告：兼容识别工具无法全部自动安装（${compat_tools_missing[*]}）；普通识别和磁盘管理仍可用。"
+fi
+
+header_package="linux-headers-$RELEASE"
+if ! installed "$header_package" && ! install_packages "$header_package"; then
+  log "警告：无法自动安装当前内核头文件 $header_package；若软件源不提供该版本头文件，兼容识别将不可用。"
+fi

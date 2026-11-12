@@ -1,0 +1,15 @@
+appname                    = smr-manager
+version                    = 0.1.14
+display_name               = Host-SMR 识别
+desc                       = 主机管理型 SMR 硬盘的识别、服务与单盘管理。支持自动/手动识别、外置盘挂载、飞牛原生空间初始化、开机服务、控制器 NCQ/32 位 DMA 设置、依赖检查与卸载清理。兼容识别主要用于解决硬盘经 ASM SATA 控制器后无法自动识别的问题；HC620 4Kn 盘目前尚不能通过 ASM 芯片识别，仅有理论可行性，当前版本不承诺支持。
+platform                   = x86
+source                     = thirdparty
+maintainer                 = 铁流
+distributor                = 飞牛
+distributor_url            = https://www.fnnas.com/
+os_min_version             = 1.2.0
+desktop_uidir              = ui
+desktop_applaunchname      = smr-manager.main
+install_type               = root
+ctl_stop                   = true
+disable_authorization_path = true

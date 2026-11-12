@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+PREREQ=""
+case "$1" in prereqs) echo "$PREREQ"; exit 0;; esac
+. /usr/share/initramfs-tools/hook-functions
+[ -r /etc/smr-manager/controllers ] || exit 0
+mkdir -p "$DESTDIR/etc/smr-manager"
+cp /etc/smr-manager/controllers "$DESTDIR/etc/smr-manager/controllers"
+manual_add_modules libata
+manual_add_modules smr_policy

@@ -1,0 +1,15 @@
+#!/bin/bash
+# 卸载回调：显式卸载时直接清理应用私有配置/日志目录，不再保留、不再询问。
+# 磁盘上的 dm-zoned/LVM/Btrfs 数据不在此目录，清理不会影响盘上数据。
+set -euo pipefail
+VAR="${TRIM_PKGVAR:-}"
+case "$VAR" in
+  /usr/local/apps/@appdata/smr-manager)
+    rm -rf "$VAR"
+    ;;
+  *)
+    # 路径不符合预期时不动任何文件，只在安装日志里留痕。
+    echo "卸载清理跳过：TRIM_PKGVAR=${VAR:-<unset>} 不是预期的应用数据目录" >&2
+    ;;
+esac
+exit 0

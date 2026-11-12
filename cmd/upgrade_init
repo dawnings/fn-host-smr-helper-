@@ -1,0 +1,9 @@
+#!/bin/bash
+# 升级初始化：实测（2026-10-29 .19）install_init 在应用解包前执行；
+# upgrade_init 同样在解包/替换前执行，此时只有旧版本文件，不能可靠调用
+# 新二进制的 --check-deps。依赖检查统一放在 install_callback / upgrade_callback。
+# 这里保留日志说明，避免误以为升级未做检查。
+set -euo pipefail
+LOG="${TRIM_TEMP_LOGFILE:-/dev/stderr}"   # 不回退到 /tmp 下的固定文件名（root 追加写有被符号链接劫持的风险）
+echo "升级初始化：依赖检查将在 upgrade_callback（新文件就位后）执行。" >>"$LOG"
+exit 0

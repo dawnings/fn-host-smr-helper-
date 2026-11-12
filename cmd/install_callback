@@ -1,0 +1,67 @@
+#!/bin/bash
+# 安装回调：应用文件此时已就位，先自动安装可由 apt 管理的软件包，再检查依赖。
+set -euo pipefail
+mkdir -p "${TRIM_PKGVAR}"
+chmod 700 "${TRIM_PKGVAR}"
+ROOT="${TRIM_APPDEST}"
+BIN="$ROOT/bin/smr-manager"
+LOG="${TRIM_TEMP_LOGFILE:-/dev/stderr}"   # 不回退到 /tmp 下的固定文件名（root 追加写有被符号链接劫持的风险）
+DEPS="$ROOT/bin/install-deps"
+# 仅测试用：允许测试包注入 --deps-* 覆盖参数；生产环境为空。
+EXTRA="${SMR_DEPS_TEST_ARGS:-}"
+
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 8))'; then
+  echo '需要 Python 3.8 或更新版本才能运行 USB 扫描。' >>"$LOG"
+  exit 1
+fi
+
+if [ ! -x "$BIN" ]; then
+  echo "依赖检查失败：安装包内缺少后端二进制 $BIN" >>"$LOG"
+  exit 1
+fi
+
+if [ ! -x "$DEPS" ]; then
+  echo "依赖安装失败：安装包内缺少依赖安装脚本 $DEPS" >>"$LOG"
+  exit 1
+fi
+if ! "$DEPS" "$LOG"; then
+  echo "必须依赖自动安装失败，安装已中止；请检查安装日志及软件源。" >>"$LOG"
+  exit 1
+fi
+
+set +e
+# shellcheck disable=SC2086
+OUT=$("$BIN" --check-deps --root "$ROOT" --deps-human $EXTRA 2>&1)
+rc=$?
+set -e
+
+if [ "$rc" -ne 0 ]; then
+  {
+    echo "依赖检查失败，安装已中止："
+    echo "$OUT" | grep '^\[hard\]' || echo "$OUT"
+    echo "自动安装后仍缺少必须依赖；请检查系统版本、软件源和安装日志。"
+  } >>"$LOG"
+  exit 1
+fi
+
+if echo "$OUT" | grep -q '^\[compat\]'; then
+  {
+    echo "警告：兼容识别不可用（以下 compat 依赖缺失，安装继续）："
+    echo "$OUT" | grep '^\[compat\]'
+    echo "兼容识别依赖可能不适配当前内核或软件源；可补齐依赖后在识别页手动重试。"
+  } >>"$LOG"
+fi
+
+# Installing the package never registers storage services or initializes disks.
+# 安装/升级后按配置同步 service：重建或移除单元，不启动、不清盘。
+set +e
+REC=$("$BIN" --root "$ROOT" --var "${TRIM_PKGVAR:?缺少 TRIM_PKGVAR}" --task reconcile-services 2>&1)
+rec_rc=$?
+set -e
+if [ "$rec_rc" -ne 0 ]; then
+  echo "安装时服务同步失败（安装继续，可稍后在应用内重新开关服务）：$REC" >>"$LOG"
+else
+  echo "$REC" >>"$LOG"
+fi
+
+exit 0

@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+case ${1:-} in ''|*[!A-Za-z0-9._+-]*) exit 1;; esac
+[ -r /etc/smr-manager/controllers ] || exit 0
+[ -d "/lib/modules/$1/build" ] || exit 0
+root=/usr/src/smr-manager
+[ -f "$root/smr_policy.c" ] || exit 0
+cache="/var/cache/smr-manager/modules/$1"
+mkdir -p "$cache"
+cp "$root/Makefile" "$root/smr_policy.c" "$root/smr_sata.c" "$cache/"
+compiler=gcc
+command -v "$compiler" >/dev/null || compiler=gcc-12
+make -C "/lib/modules/$1/build" "M=$cache" "CC=$compiler" modules
+release=$(modinfo -F vermagic "$cache/smr_policy.ko")
+[ "${release%% *}" = "$1" ] || exit 1
+install -D -m 644 "$cache/smr_policy.ko" "/lib/modules/$1/updates/smr-manager/smr_policy.ko"
+depmod -a "$1"
+update-initramfs -u -k "$1"

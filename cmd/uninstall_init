@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+"${TRIM_APPDEST}/bin/smr-manager" --root "$TRIM_APPDEST" --var "$TRIM_PKGVAR" --task unregister
+# Active mappings and filesystems are deliberately preserved.

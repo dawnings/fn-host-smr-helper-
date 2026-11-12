@@ -1,0 +1,1 @@
+{".url": {"smr-manager.main": {"title": "Host-SMR 识别", "icon": "images/icon_{0}.png", "type": "iframe", "protocol": "", "gatewayPrefix": "/app/smr-manager", "gatewaySocket": "usb-gateway.sock", "url": "/app/smr-manager/", "allUsers": false}}}

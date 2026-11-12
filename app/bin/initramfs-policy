@@ -1,0 +1,23 @@
+#!/bin/sh
+# Early boot only. No driver unbinds and no changes to existing DMA allocations.
+PREREQ=""
+prereqs(){ echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+[ -r /etc/smr-manager/controllers ] || exit 0
+ncq=; dma32=
+for d in /sys/bus/pci/devices/*; do
+ [ -r "$d/vendor" ] || continue
+ path=$(readlink -f "$d")
+ slots=$(printf '%s\n' "$path" | awk -F/ '{s="";r="";for(i=1;i<=NF;i++){if($i ~ /^pci[0-9a-f][0-9a-f][0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]$/)r=$i;if($i ~ /^[0-9a-f][0-9a-f][0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]\.[0-7]$/){if(s!="")s=s"/";s=s substr($i,9)}};print r"/"s}')
+ key="$(cat "$d/vendor")|$(cat "$d/device")|$(cat "$d/subsystem_vendor")|$(cat "$d/subsystem_device")|$slots"
+ while read -r id q m; do
+  [ "$id" = "$key" ] || continue
+  bdf=${d##*/}
+  [ "$q" = 1 ] && ncq="${ncq:+$ncq,}$bdf"
+  [ "$m" = 1 ] && dma32="${dma32:+$dma32,}$bdf"
+ done < /etc/smr-manager/controllers
+done
+[ -n "$ncq$dma32" ] || exit 0
+modprobe -q libata || exit 0
+modprobe -q smr_policy "ncq=$ncq" "dma32=$dma32" || echo 'SMR controller policy unavailable; continuing system driver defaults' >&2
+exit 0

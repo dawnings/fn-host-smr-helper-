@@ -1,0 +1,51 @@
+#!/bin/bash
+set -euo pipefail
+
+root=${TRIM_APPDEST:-/var/apps/smr-manager/target}
+var=${TRIM_PKGVAR:-/var/apps/smr-manager/var}
+pidfile=$var/server.pid
+gateway=$root/usb-gateway.sock
+
+mkdir -p "$var"
+
+running() {
+  local pid
+  [[ -f "$pidfile" ]] && read -r pid < "$pidfile" &&
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+case ${1:-} in
+  start)
+    if running; then
+      [[ -S "$gateway" ]]
+      exit
+    fi
+    rm -f "$gateway" "$root/app.sock"
+    nohup python3 "$root/bin/usb-gateway.py" --root "$root" --var "$var" >"$var/server.log" 2>&1 </dev/null &
+    echo "$!" > "$pidfile"
+    for ((i=0; i<25; i++)); do
+      [[ -S "$gateway" ]] && exit 0
+      running || break
+      sleep 1
+    done
+    if running; then kill "$(cat "$pidfile")" 2>/dev/null || true; fi
+    echo '应用未能启动，请查看应用日志' > "${TRIM_TEMP_LOGFILE:-$var/error.log}"
+    exit 1
+    ;;
+  stop)
+    if running; then
+      kill "$(cat "$pidfile")" 2>/dev/null || true
+      for ((i=0; i<10; i++)); do
+        running || break
+        sleep 1
+      done
+      running && exit 1
+    fi
+    rm -f "$pidfile" "$gateway" "$root/app.sock"
+    ;;
+  status)
+    if [[ -S "$gateway" ]] && running; then exit 0; fi
+    exit 3
+    ;;
+  *) exit 2 ;;
+esac
